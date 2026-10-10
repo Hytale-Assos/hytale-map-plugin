@@ -23,8 +23,10 @@ chargement (coûteux pour le thread du monde) : il est opt-in via
 surface de chaque bloc vient de
 `BlockType#getTextureComputedColor`, pré-calculée par le serveur (avec teintes
 correctives pour les blocs teintés côté client : herbe, eau, mousse), complétée par un
-hillshading basé sur la heightmap des chunks. Le front (Leaflet 1.9.4, vendored) est
-servi par le même serveur HTTP : pas de CORS, pas de CDN externe.
+hillshading basé sur la heightmap des chunks. Les fluides (eau, lave) vivent dans une
+couche de chunk séparée des blocs : ils sont lus via `getFluidId` et peints en blend
+semi-transparent (~68 %) sur le fond de la colonne inondée. Le front (Leaflet 1.9.4,
+vendored) est servi par le même serveur HTTP : pas de CORS, pas de CDN externe.
 
 Toutes les lectures de chunks se font sur le thread du monde (via `World#execute`) dans des
 snapshots immuables ; l'assemblage PNG se fait sur un executor dédié mono-thread.

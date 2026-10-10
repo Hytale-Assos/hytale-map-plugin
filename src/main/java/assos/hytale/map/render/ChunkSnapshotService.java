@@ -27,9 +27,12 @@ public final class ChunkSnapshotService {
 
     private static final int MAX_CACHED_CHUNKS = 8192;
     private static final int SURFACE_SEARCH_DEPTH = 16;
+    private static final int FLUID_SEARCH_DEPTH = 16;
+    private static final float FLUID_OPACITY = 0.68f;
     private static final int MAX_CONCURRENT_STORAGE_LOADS = 8;
 
     private final BlockPalette palette;
+    private final FluidPalette fluidPalette;
     private final RenderCache renderCache;
     private final boolean loadChunksOnDemand;
     private final Semaphore storageLoadSlots = new Semaphore(MAX_CONCURRENT_STORAGE_LOADS);
@@ -42,9 +45,10 @@ public final class ChunkSnapshotService {
                 }
             });
 
-    public ChunkSnapshotService(@Nonnull BlockPalette palette, @Nonnull RenderCache renderCache,
-            boolean loadChunksOnDemand, @Nonnull MapStats stats) {
+    public ChunkSnapshotService(@Nonnull BlockPalette palette, @Nonnull FluidPalette fluidPalette,
+            @Nonnull RenderCache renderCache, boolean loadChunksOnDemand, @Nonnull MapStats stats) {
         this.palette = palette;
+        this.fluidPalette = fluidPalette;
         this.renderCache = renderCache;
         this.loadChunksOnDemand = loadChunksOnDemand;
         this.stats = stats;
@@ -179,17 +183,64 @@ public final class ChunkSnapshotService {
         for (int localZ = 0; localZ < ChunkSnapshot.CHUNK_SIZE; localZ++) {
             for (int localX = 0; localX < ChunkSnapshot.CHUNK_SIZE; localX++) {
                 short height = blockChunk.getHeight(localX, localZ);
-                int surfaceBlockId = findSurfaceBlock(chunk, localX, localZ, height);
+                int surfaceY = findSurfaceBlockY(chunk, localX, localZ, height);
+                int surfaceBlockId =
+                        surfaceY >= 0 ? chunk.getBlock(localX, surfaceY, localZ) : 0;
                 heights[localX + localZ * ChunkSnapshot.CHUNK_SIZE] = height;
                 colors[localX + localZ * ChunkSnapshot.CHUNK_SIZE] =
-                        surfaceBlockId == 0 ? 0 : palette.color(surfaceBlockId);
+                        columnColor(chunk, localX, localZ, surfaceY, surfaceBlockId);
             }
         }
         return ChunkSnapshot.captured(chunkX, chunkZ, heights, colors);
     }
 
+    /**
+     * Surface color of one column: the surface block color, blended with the
+     * fluid color when the column is flooded above it.
+     */
     @SuppressWarnings("deprecation")
-    private int findSurfaceBlock(@Nonnull WorldChunk chunk, int localX, int localZ, int height) {
+    private int columnColor(@Nonnull WorldChunk chunk, int localX, int localZ,
+            int surfaceY, int surfaceBlockId) {
+        int blockColor = palette.isRenderable(surfaceBlockId) ? palette.color(surfaceBlockId) : 0;
+        int fluidId = topFluidAbove(chunk, localX, localZ, surfaceY);
+        if (!fluidPalette.isFluid(fluidId)) {
+            return blockColor;
+        }
+        return blendOver(fluidPalette.color(fluidId), blockColor);
+    }
+
+    @SuppressWarnings("deprecation")
+    private int topFluidAbove(@Nonnull WorldChunk chunk, int localX, int localZ, int surfaceY) {
+        if (surfaceY < 0) {
+            return 0;
+        }
+        int topFluidId = 0;
+        int maxY = Math.min(surfaceY + FLUID_SEARCH_DEPTH, ChunkUtil.HEIGHT - 1);
+        for (int y = surfaceY + 1; y <= maxY; y++) {
+            int fluidId = chunk.getFluidId(localX, y, localZ);
+            if (fluidPalette.isFluid(fluidId)) {
+                topFluidId = fluidId;
+            }
+        }
+        return topFluidId;
+    }
+
+    private static int blendOver(int fluidColor, int blockColor) {
+        if (blockColor == 0) {
+            return fluidColor;
+        }
+        float keep = 1.0f - FLUID_OPACITY;
+        int red = (int) Math.min(255, ((fluidColor >> 16) & 0xFF) * FLUID_OPACITY
+                + ((blockColor >> 16) & 0xFF) * keep);
+        int green = (int) Math.min(255, ((fluidColor >> 8) & 0xFF) * FLUID_OPACITY
+                + ((blockColor >> 8) & 0xFF) * keep);
+        int blue = (int) Math.min(255, (fluidColor & 0xFF) * FLUID_OPACITY
+                + (blockColor & 0xFF) * keep);
+        return 0xFF000000 | (red << 16) | (green << 8) | blue;
+    }
+
+    @SuppressWarnings("deprecation")
+    private int findSurfaceBlockY(@Nonnull WorldChunk chunk, int localX, int localZ, int height) {
         int y = Math.min(height, ChunkUtil.HEIGHT - 1);
         int blockId = chunk.getBlock(localX, y, localZ);
         int guard = SURFACE_SEARCH_DEPTH;
@@ -197,6 +248,6 @@ public final class ChunkSnapshotService {
             y--;
             blockId = chunk.getBlock(localX, y, localZ);
         }
-        return palette.isRenderable(blockId) ? blockId : 0;
+        return palette.isRenderable(blockId) ? y : -1;
     }
 }

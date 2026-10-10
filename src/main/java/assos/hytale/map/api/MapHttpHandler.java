@@ -34,6 +34,7 @@ import assos.hytale.map.config.MapConfig;
 import assos.hytale.map.render.BlockPalette;
 import assos.hytale.map.render.ChunkSnapshot;
 import assos.hytale.map.render.ChunkSnapshotService;
+import assos.hytale.map.render.FluidPalette;
 import assos.hytale.map.render.MarkerService;
 import assos.hytale.map.render.MarkerService.PlayerMarker;
 import assos.hytale.map.render.RenderCache;
@@ -67,6 +68,7 @@ public final class MapHttpHandler implements HttpHandler {
 
     private final MapConfig config;
     private final BlockPalette palette;
+    private final FluidPalette fluidPalette;
     private final TileRenderer tileRenderer;
     private final MarkerService markerService;
     private final ExecutorService renderExecutor;
@@ -76,11 +78,13 @@ public final class MapHttpHandler implements HttpHandler {
     private final Map<String, String> staticFiles = new HashMap<>();
 
     public MapHttpHandler(@Nonnull MapConfig config, @Nonnull BlockPalette palette,
-            @Nonnull TileRenderer tileRenderer, @Nonnull MarkerService markerService,
-            @Nonnull ExecutorService renderExecutor, @Nonnull ChunkSnapshotService snapshots,
-            @Nonnull RenderCache renderCache, @Nonnull MapStats stats) {
+            @Nonnull FluidPalette fluidPalette, @Nonnull TileRenderer tileRenderer,
+            @Nonnull MarkerService markerService, @Nonnull ExecutorService renderExecutor,
+            @Nonnull ChunkSnapshotService snapshots, @Nonnull RenderCache renderCache,
+            @Nonnull MapStats stats) {
         this.config = config;
         this.palette = palette;
+        this.fluidPalette = fluidPalette;
         this.tileRenderer = tileRenderer;
         this.markerService = markerService;
         this.renderExecutor = renderExecutor;
@@ -301,10 +305,16 @@ public final class MapHttpHandler implements HttpHandler {
                 @SuppressWarnings("deprecation")
                 int blockId = chunk.getBlock(localX, y, localZ);
                 BlockType type = BlockType.getAssetMap().getAssetOrDefault(blockId, null);
+                @SuppressWarnings("deprecation")
+                int fluidId = chunk.getFluidId(localX, y, localZ);
                 Map<String, Object> entry = new HashMap<>();
                 entry.put("y", y);
                 entry.put("id", blockId);
                 entry.put("name", type != null ? type.getId() : null);
+                entry.put("fluid", fluidPalette.isFluid(fluidId) ? fluidPalette.name(fluidId) : null);
+                entry.put("fluidColor", fluidPalette.isFluid(fluidId)
+                        ? String.format("#%06x", fluidPalette.color(fluidId) & 0xFFFFFF)
+                        : null);
                 entry.put("color", palette.isRenderable(blockId)
                         ? String.format("#%06x", palette.color(blockId) & 0xFFFFFF)
                         : null);

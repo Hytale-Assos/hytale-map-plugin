@@ -31,6 +31,7 @@ import assos.hytale.map.config.MapConfig;
 import assos.hytale.map.render.BlockPalette;
 import assos.hytale.map.render.ChunkSnapshot;
 import assos.hytale.map.render.ChunkSnapshotService;
+import assos.hytale.map.render.FluidPalette;
 import assos.hytale.map.render.MarkerService;
 import assos.hytale.map.render.RenderCache;
 import assos.hytale.map.render.TileRenderer;
@@ -92,7 +93,8 @@ public class HytaleMapPlugin extends JavaPlugin {
             return;
         }
         MapStats stats = new MapStats();
-        ChunkSnapshotService snapshots = new ChunkSnapshotService(palette, renderCache,
+        FluidPalette fluidPalette = FluidPalette.fromAssetMap();
+        ChunkSnapshotService snapshots = new ChunkSnapshotService(palette, fluidPalette, renderCache,
                 mapConfig.isLoadChunksOnDemand(), stats);
         TileRenderer tileRenderer = new TileRenderer(snapshots, mapConfig.isHillshading(), stats);
         MarkerService markerService = new MarkerService();
@@ -102,8 +104,8 @@ public class HytaleMapPlugin extends JavaPlugin {
             thread.setDaemon(true);
             return thread;
         });
-        MapHttpHandler handler = new MapHttpHandler(mapConfig, palette, tileRenderer, markerService,
-                renderExecutor, snapshots, renderCache, stats);
+        MapHttpHandler handler = new MapHttpHandler(mapConfig, palette, fluidPalette, tileRenderer,
+                markerService, renderExecutor, snapshots, renderCache, stats);
         httpServer = new MapHttpServer(mapConfig, handler);
         try {
             httpServer.start();
