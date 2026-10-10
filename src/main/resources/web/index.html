@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Hytale Map</title>
+    <link rel="stylesheet" href="/leaflet.css">
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            background: #101418;
+            font-family: system-ui, sans-serif;
+        }
+
+        #map {
+            height: 100%;
+            background: #101418;
+        }
+
+        #status {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            background: rgba(16, 20, 24, 0.8);
+            color: #cfd8dc;
+            padding: 6px 10px;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+
+        #stats {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            z-index: 1000;
+            background: rgba(16, 20, 24, 0.8);
+            color: #9aa7ad;
+            padding: 6px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .player-label {
+            background: rgba(16, 20, 24, 0.8);
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            padding: 2px 6px;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+<div id="map"></div>
+<div id="status">chargement...</div>
+<div id="stats"></div>
+<script src="/leaflet.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>

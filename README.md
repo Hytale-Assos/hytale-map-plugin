@@ -1,161 +1,83 @@
-# Hytale Plugin Template
+# Hytale Map
 
-A ready-to-use starting point for creating Hytale server plugins with Java, _or Kotlin_. If you've
-been using the Asset Editor and want to start writing server-side logic — custom commands, event
-handling, gameplay systems — this is the simplest place to begin.
+Carte 2D temps réel du monde Hytale, servie par HTTP directement depuis le plugin serveur
+(dynmap-like). Développé par l'association **HytaleAssos**.
 
-This template uses the [Hytale Gradle Plugin](https://github.com/AzureDoom/Hytale-Gradle-Plugin),
-a Gradle plugin maintained by AzureDoom for Hytale mod/plugin development. It handles the repetitive
-project setup work for you, including manifest generation, validation, local server runs, IDE source
-setup, and optional hosted Hytale Javadoc injection.
+- Cible : serveur Hytale `>=0.6.5 <0.7.0`
+- Langage : Java 25, build Gradle (`com.azuredoom.hytale-tools`)
+- HTTP : `com.sun.net.httpserver` du JDK, aucune dépendance ajoutée
+- JSON : Gson fourni par le serveur Hytale, jamais embarqué
 
-## How to start
+## Fonctionnement
 
-1. Copy the template by downloading it or using the **Use this template** button.
-2. [Configure or install the Java SDK](https://hytalemodding.dev/en/docs/guides/plugin/setting-up-env)
-   to use Java 25. JetBrains Runtime is recommended for the best hot-reload/debugging experience.
-3. Open the project in your favorite IDE. We recommend
-   [IntelliJ IDEA](https://www.jetbrains.com/idea/download).
-4. Update the project values in `gradle.properties`:
-    - `rootProject.name` in `settings.gradle.kts`
-    - `group`
-    - `manifest_group`
-    - `mod_name`
-    - `mod_id`
-    - `main_class`
-    - `mod_author`
-    - `mod_description`
-    - `mod_url`
-5. Optionally run `./gradlew` if your IDE does not automatically sync the project.
-6. Prepare the Hytale development environment:
+Le plugin rend le monde par défaut en tuiles PNG de 256×256 pixels couvrant 256×256 blocs.
+Dans Leaflet (CRS.Simple), une tuile de 256 px couvre `256/2^zoom` unités de carte : une
+tuile de 256 blocs correspond donc à la **grille de zoom 0**, native sur le serveur ; les
+zooms supérieurs (1 à 4) l'upscalent côté client (`maxNativeZoom: 0`). Les chunks chargés
+sont lus en mémoire et leur état final est persisté dans un cache de rendu disque au
+déchargement (`render-cache/` dans le répertoire de données) — la carte affiche donc toute
+zone déjà visitée, où que l'on navigue, sans coût pour le serveur. Le chargement à la
+demande depuis le stockage monde (zones jamais visitées) passe par le pipeline complet de
+chargement (coûteux pour le thread du monde) : il est opt-in via
+`LoadChunksOnDemand=true` et limité à 8 chargements simultanés. La couleur de
+surface de chaque bloc vient de
+`BlockType#getTextureComputedColor`, pré-calculée par le serveur (avec teintes
+correctives pour les blocs teintés côté client : herbe, eau, mousse), complétée par un
+hillshading basé sur la heightmap des chunks. Le front (Leaflet 1.9.4, vendored) est
+servi par le même serveur HTTP : pas de CORS, pas de CDN externe.
 
-   ```bash
-   ./gradlew setupHytaleDev
-   ```
+Toutes les lectures de chunks se font sur le thread du monde (via `World#execute`) dans des
+snapshots immuables ; l'assemblage PNG se fait sur un executor dédié mono-thread.
 
-7. Run the local development server:
+## Endpoints
 
-   ```bash
-   ./gradlew runServer
-   ```
-
-> On Windows, use `./gradlew.bat` or `gradlew.bat` instead of `./gradlew`. The Gradle wrapper is
-> included so you do not need to install Gradle separately; only Java is required.
-
-When the server starts, the output may prompt you to authorize your Hytale server. After that, you
-can begin developing your plugin while the server handles local development runs.
-
-From here, the [HytaleModding guides](https://hytalemodding.dev/en/docs/guides/plugin/build-and-test)
-cover more details.
-
-## Hytale Gradle Plugin
-
-This template is built around AzureDoom's `com.azuredoom.hytale-tools` Gradle plugin.
-
-The plugin is configured in `build.gradle.kts`:
-
-```kotlin
-plugins {
-    idea
-    java
-    id("com.azuredoom.hytale-tools") version "1.+"
-}
+```
+GET /                          front Leaflet (index.html, app.js, leaflet.*)
+GET /tiles/{zoom}/{x}_{z}.png  tuile rendue (zoom 0 natif : 256×256 blocs)
+GET /markers.json               [{uuid, name, x, y, z}] joueurs du monde par défaut
+GET /stats.json                métriques runtime : mémoire, temps de rendu, caches
+GET /debug/palette.json        correspondance id bloc → nom, groupe, couleur
+GET /debug/column/{x}_{z}.json blocs de surface d'une colonne du monde
 ```
 
-The AzureDoom Maven repository is configured in `settings.gradle.kts`:
-
-```kotlin
-pluginManagement {
-    repositories {
-        gradlePluginPortal()
-        mavenCentral()
-        maven {
-            name = "AzureDoom Maven"
-            url = uri("https://maven.azuredoom.com/mods")
-        }
-    }
-}
-```
-
-Most plugin-specific settings are controlled from `gradle.properties` and passed into the
-`hytaleTools` block in `build.gradle.kts`. This keeps common project metadata in one easy-to-edit
-place.
-
-For full plugin documentation, configuration options, tasks, and multi-project setup, visit the
-[Hytale Gradle Plugin repository](https://github.com/AzureDoom/Hytale-Gradle-Plugin).
-
-## Useful commands
+## Build et dev
 
 ```bash
-# Sync/setup the local Hytale development environment
-./gradlew setupHytaleDev
-
-# Run the local Hytale server
-./gradlew runServer
-
-# Run the server with debugging and hot swap enabled
-./gradlew runServer -Ddebug=true -Dhotswap=true
-
-# Check your JVM and hot swap setup
-./gradlew hytaleJvmDoctor
-
-# Build the plugin
-./gradlew build
-
-# Refresh dependencies if something fails to resolve
-./gradlew build --refresh-dependencies
-```
-
-## Project structure
-
-```text
-src/main/java/        Plugin source code
-src/main/resources/   Plugin resources, including manifest.json
-gradle.properties     Main template configuration
-build.gradle.kts      Gradle build and Hytale Gradle Plugin configuration
-settings.gradle.kts   Plugin repositories and project name
-```
-
-## Manifest configuration
-
-The generated `manifest.json` is driven by the values in `gradle.properties`, including:
-
-- `manifest_group`
-- `mod_id`
-- `version`
-- `mod_description`
-- `mod_author`
-- `mod_url`
-- `main_class`
-- `manifest_dependencies`
-- `manifest_opt_dependencies`
-- `manifestServerVersion`
-
-After changing these values, run:
-
-```bash
+./gradlew build            # compile + valide le manifest
+./gradlew runServer        # serveur de dev
 ./gradlew updatePluginManifest
 ```
 
-## Troubleshooting
+Aucune commande en jeu : la carte se consulte dans un navigateur sur l'URL affichée au
+démarrage (par défaut `http://127.0.0.1:8090/`).
 
-- **Gradle sync fails in IntelliJ** — Check that Java 25 is installed and configured under
-  **File → Project Structure → SDKs**.
-- **The Hytale Gradle Plugin does not resolve** — Make sure `settings.gradle.kts` includes the
-  AzureDoom Maven repository at `https://maven.azuredoom.com/mods`.
-- **Build fails with missing dependencies** — Run `./gradlew build --refresh-dependencies` and make
-  sure you have internet access.
-- **Permission denied on `./gradlew`** — Run `chmod +x gradlew` on macOS/Linux.
-- **Hot reload or enhanced class redefinition does not work** — Use JetBrains Runtime and try
-  `./gradlew hytaleJvmDoctor` to verify your JVM setup.
+## Configuration
 
-## Resources
+Fichier `map_config.json`, généré dans le répertoire de données du plugin au premier
+démarrage :
 
-- [Hytale Gradle Plugin](https://github.com/AzureDoom/Hytale-Gradle-Plugin)
-- [Hytale Modding Guides](https://hytalemodding.dev)
-- [Hytale Modding Discord](https://discord.gg/hytalemodding)
+| Clé                 | Défaut      | Description                                                            |
+|---------------------|-------------|------------------------------------------------------------------------|
+| `ApiEnabled`        | `true`      | Active le serveur HTTP de la carte.                                     |
+| `ApiHost`           | `127.0.0.1` | Adresse d'écoute ; non-loopback refusé sauf `AllowRemoteAccess=true`.   |
+| `ApiPort`           | `8090`      | Port d'écoute HTTP.                                                     |
+| `ApiRequireAuth`     | `false`     | Exige un token Bearer sur tous les endpoints (désactivé par défaut car le front s'ouvre dans un navigateur). |
+| `ApiToken`          | `""`        | Token Bearer attendu quand `ApiRequireAuth=true`.                       |
+| `AllowRemoteAccess` | `false`     | Autorise l'écoute hors loopback (LAN).                                  |
+| `Hillshading`       | `true`      | Ombrage du relief selon la heightmap.                                  |
+| `LoadChunksOnDemand` | `false`    | Charge depuis le stockage monde les chunks jamais visités (coûteux pour le serveur : pipeline de pre-load complet, 8 chargements simultanés max). |
 
-## License
+## Roadmap
 
-Add your own license after copying the template. We recommend MIT, BSD, or Apache to keep the
-modding community open.
+1. [x] Tuiles statiques du monde par défaut au zoom 1, affichées dans Leaflet.
+2. [x] Palette de couleurs via `getTextureComputedColor` + hillshading.
+3. [x] Marqueurs polling (joueurs).
+4. [x] Invalidation incrémentale des tuiles sur Place/Break/EnvironmentBreak.
+5. [x] Cache de rendu disque : les zones visitées restent affichées sans rechargement.
+6. [x] Métriques runtime (`/stats.json` + panneau front) et revalidation ETag (304).
+7. [ ] Rendu multi-mondes et pyramide de zooms natifs (zooms < 0).
+
+## Développement
+
+- Branche d'intégration : `develop`. Fonctionnalités : `feat/<sujet>` depuis `develop`.
+- Un commit = un sujet, format `type(scope): description` (voir `AGENTS.md`).

@@ -78,7 +78,8 @@ c'est la valeur ajoutée de ce mod.
    se font sur le thread du monde ou via les variantes async (`getChunkAsync`,
    `getChunkSectionReferenceAsync`). Le rendu lourd se fait sur un executor dédié
    (mono-thread, pattern déjà éprouvé dans hytale-server-management-plugin).
-3. Pas de heightmap publique → scan de colonnes par chunk, avec cache disque.
+3. Heightmap disponible par chunk : `WorldChunk#getBlockChunk().getHeight(x, z)` (vérifié 0.6.8,
+   non déprécié). Pas besoin de scanner les colonnes pour trouver la surface.
 4. Pas de WebSocket dans `com.sun.net.httpserver` → polling JSON côté front.
 5. JSON : Gson fourni par le serveur (ne jamais l'embarquer). HTTP : JDK uniquement,
    ne jamais ajouter de dépendance HTTP.
@@ -117,7 +118,12 @@ setInterval(async () => {
 }, 2000);
 ```
 
-- Piège : Leaflet `{y}` va vers le haut, les blocs Z vont vers le bas → `y = -z - 1`.
+- Piège (vérifié en pratique) : le flip `y = -z` appartient AU MARQUEUR (latlng),
+  pas à l'URL des tuiles. CRS.Simple négative déjà lat à la projection, et
+  lat = -z la négative une seconde fois : à l'écran, pixel y = bloc z. La rangée
+  de tuile Leaflet `coords.y` correspond donc directement à la tuile monde z —
+  ne pas appliquer `-z - 1` dans getTileUrl (décale toute la carte d'une tuile
+  verticalement).
 - `maxNativeZoom` : plusieurs zooms front pour une seule pyramide serveur au début.
 - Convention à fixer en v0 : origine du monde = coin haut-gauche de la tuile 0,0.
 
