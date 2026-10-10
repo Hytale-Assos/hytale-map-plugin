@@ -10,3 +10,6 @@ run/
 .project
 .settings/
 .vscode
+src/main/resources/map_config.json
+src/main/resources/map_config.json.bak
+src/main/resources/render-cache/
